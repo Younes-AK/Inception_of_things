@@ -1,0 +1,27 @@
+Vagrant.configure("2") do |config|
+
+  config.vm.define "yakazdaoS" do |server|
+    server.vm.box = "ubuntu/jammy64"
+    server.vm.hostname = "yakazdaoS"
+    server.vm.network "private_network", ip: "192.168.56.110"
+
+    server.vm.provider "virtualbox" do |vb|
+      vb.gui = false
+      vb.cpus = 1
+      vb.memory = "1024"
+    end
+  end
+
+  config.vm.define "yakazdaoSW" do |worker|
+    worker.vm.box = "ubuntu/jammy64"
+    worker.vm.hostname = "yakazdaoSW"
+    worker.vm.network "private_network", ip: "192.168.56.111"
+
+    worker.vm.provider "virtualbox" do |vb|
+      vb.gui = false
+      vb.cpus = 1
+      vb.memory = "1024"
+    end
+  end
+
+end
