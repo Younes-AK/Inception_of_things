@@ -1,78 +1,73 @@
-
 Vagrant.configure("2") do |config|
 
   config.vm.box = "ubuntu/jammy64"
+  config.vm.boot_timeout = 600
 
   # =========================
   # K3s Server
   # =========================
-
   config.vm.define "yakazdaoS" do |server|
-
     server.vm.hostname = "yakazdaoS"
-
-    server.vm.network "private_network",
-      ip: "192.168.56.110"
+    server.vm.network "private_network", ip: "192.168.56.110"
 
     server.vm.provider "virtualbox" do |vb|
       vb.name = "yakazdaoS"
       vb.cpus = 1
       vb.memory = 1024
+      vb.customize ["modifyvm", :id, "--uart1", "off"]
+      vb.customize ["modifyvm", :id, "--cableconnected1", "on"]
     end
 
     server.vm.provision "shell", inline: <<-SHELL
-      curl -sfL https://get.k3s.io | sh -
+      rm -f /vagrant/node-token
+
+      curl -sfL https://get.k3s.io | \
+        INSTALL_K3S_EXEC="server --node-ip=192.168.56.110 --flannel-iface=enp0s8 --write-kubeconfig-mode=644" \
+        sh -
+
+      until [ -f /var/lib/rancher/k3s/server/node-token ]; do
+        sleep 2
+      done
+      cp /var/lib/rancher/k3s/server/node-token /vagrant/node-token
     SHELL
-
   end
-
 
   # =========================
   # K3s Worker
   # =========================
-
   config.vm.define "yakazdaoSW" do |worker|
-
     worker.vm.hostname = "yakazdaoSW"
-
-    worker.vm.network "private_network",
-      ip: "192.168.56.111"
+    worker.vm.network "private_network", ip: "192.168.56.111"
 
     worker.vm.provider "virtualbox" do |vb|
       vb.name = "yakazdaoSW"
       vb.cpus = 1
       vb.memory = 1024
+      vb.customize ["modifyvm", :id, "--uart1", "off"]
+      vb.customize ["modifyvm", :id, "--cableconnected1", "on"]
     end
 
     worker.vm.provision "shell", inline: <<-SHELL
-
       SERVER=192.168.56.110
 
-      echo "Waiting for K3s server..."
+      echo "Waiting for K3s token..."
+      until [ -s /vagrant/node-token ]; do
+        sleep 3
+      done
 
-      # Wait until the K3s API port is reachable
+      echo "Waiting for K3s API..."
       until timeout 2 bash -c "</dev/tcp/$SERVER/6443" 2>/dev/null; do
         sleep 3
       done
 
-      echo "K3s server is reachable!"
-
-      # Get the server join token
-      TOKEN=$(ssh \
-        -o StrictHostKeyChecking=no \
-        vagrant@$SERVER \
-        "sudo cat /var/lib/rancher/k3s/server/node-token")
-
-      echo "Installing K3s agent..."
+      TOKEN=$(cat /vagrant/node-token)
 
       curl -sfL https://get.k3s.io | \
         K3S_URL=https://$SERVER:6443 \
         K3S_TOKEN=$TOKEN \
+        INSTALL_K3S_EXEC="agent --node-ip=192.168.56.111 --flannel-iface=enp0s8" \
         sh -
-
     SHELL
-
   end
 
 end
- 
